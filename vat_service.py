@@ -4,6 +4,15 @@ from cache import VATCache
 from circuit_breaker import CircuitBreaker
 import time
 
+def clean_vat(vat: str):
+    return (
+        vat.strip()
+        .replace(" ", "")
+        .replace("\n", "")
+        .replace("\r", "")
+        .upper()
+    )
+
 
 class VATCheckService:
 
@@ -15,7 +24,7 @@ class VATCheckService:
 
     def check(self, vat: str):
 
-        vat = vat.replace(" ", "").upper()
+        vat = clean_vat(vat)
 
         cached = self.cache.get(vat)
         if cached:
@@ -31,8 +40,11 @@ class VATCheckService:
             except Exception as e:
                 return {"valid": False, "error": str(e)}
 
-        country = vat[:2]
-        number = vat[2:]
+        if len(vat) < 3:
+    return {"valid": False, "error": "invalid input", "source": "system"}
+
+country = vat[:2]
+number = vat[2:]
 
         try:
             result = self.vies.check(country, number)
