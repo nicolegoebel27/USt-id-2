@@ -16,32 +16,82 @@ def clean_vat(vat: str):
 
 class VATCheckService:
 
+    def search_company(self, name, address=""):
+
+    query = name
+    if address:
+        query += " " + address
+
+    url = f"https://api.opencorporates.com/v0.4/companies/search?q={query}"
+
+    try:
+        import requests
+        r = requests.get(url, timeout=10)
+        data = r.json()
+
+        companies = data.get("results", {}).get("companies", [])
+
+        if not companies:
+            return {"name": "", "vat": "", "address": ""}
+
+        best = companies[0]["company"]
+
+        return {
+            "name": best.get("name", ""),
+            "address": best.get("registered_address", ""),
+            "vat": best.get("company_number", "")
+        }
+
+    except Exception as e:
+        return {"name": "", "vat": "", "address": "", "error": str(e)}
+
+
+
     def __init__(self):
         self.vies = VIESClient()
         self.bzst = BZStClient()
         self.cache = VATCache()
         self.cb = CircuitBreaker()
 
-    def check(self, vat: str):
+    def check(self, input_text: str, mode="company"):
 
-        vat = clean_vat(vat)
+    input_text = input_text.strip()
 
-        cached = self.cache.get(vat)
-        if cached:
-            cached["cached"] = True
-            return cached
+    # 🔵 MODE 1: USt-ID Prüfung (optional weiter nutzbar)
+    if mode == "vat":
 
-        if vat.startswith("DE"):
-            try:
-                result = self.bzst.check(vat)
-                result["source"] = "BZSt"
-                self.cache.set(vat, result)
-                return result
-            except Exception as e:
-                return {"valid": False, "error": str(e)}
+        vat = input_text.replace(" ", "").upper()
+        country = vat[:2]
+        number = vat[2:]
 
-        if len(vat) < 3:
-    return {"valid": False, "error": "invalid input", "source": "system"}
+        try:
+            result = self.vies.check(country, number)
+            return {
+                "input": vat,
+                "valid": result.get("valid", False),
+                "name": result.get("name", ""),
+                "address": result.get("address", ""),
+                "vat": vat
+            }
+        except:
+            return {
+                "input": vat,
+                "valid": False,
+                "name": "",
+                "address": "",
+                "vat": ""
+            }
+
+    # 🟢 MODE 2: FIRMA → USt-ID Suche
+    result = self.search_company(input_text)
+
+    return {
+        "input": input_text,
+        "valid": False,
+        "name": result.get("name", ""),
+        "address": result.get("address", ""),
+        "vat": result.get("vat", "")
+    }
 
 country = vat[:2]
 number = vat[2:]
