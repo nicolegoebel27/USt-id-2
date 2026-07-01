@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import FileResponse
+import uvicorn
 
 from vat_service import VATCheckService
 from report import ExcelReport
@@ -10,42 +11,65 @@ service = VATCheckService()
 report = ExcelReport()
 
 
-@app.get("/", response_class=HTMLResponse)
-def home():
-    return """
-    <h2>USt-IdNr Checker</h2>
-
-    <form action="/upload" enctype="multipart/form-data" method="post">
-        <input type="file" name="file">
-        <button type="submit">Prüfen</button>
-    </form>
-    """
+# 🧠 automatische Erkennung
+def is_vat(text: str):
+    text = text.strip().replace(" ", "").upper()
+    return len(text) > 6 and text[:2].isalpha() and any(c.isdigit() for c in text)
 
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
 
     content = await file.read()
-    lines = content.decode().splitlines()
+
+    # robust decode (Excel / Windows / UTF-8)
+    try:
+        text = content.decode("utf-8")
+    except:
+        text = content.decode("latin-1")
+
+    lines = text.splitlines()
 
     results = []
 
-    for vat in lines:
-        vat = vat.strip()
-        if not vat:
+    for line in lines:
+
+        line = line.strip()
+
+        if not line:
             continue
 
-        result = service.check(vat, mode="company")
+        try:
+            # 🔵 USt-ID Modus
+            if is_vat(line):
+                result = service.check_vat(line)
 
-        results.append({
-            "vat": vat,
-            "valid": result.get("valid"),
-            "source": result.get("source"),
-            "cached": result.get("cached"),
-            "error": result.get("error", "")
-        })
+            # 🟢 Firmenname Modus
+            else:
+                result = service.check_company(line)
 
+        except Exception as e:
+            result = {
+                "input": line,
+                "valid": False,
+                "name": "",
+                "address": "",
+                "vat": "",
+                "error": str(e)
+            }
+
+        results.append(result)
+
+    # 📊 Excel erstellen
     output_file = "output.xlsx"
     report.generate(results, output_file)
 
-    return FileResponse(output_file, filename="UStId_Report.xlsx")
+    return FileResponse(
+        output_file,
+        filename="USt_Report.xlsx"
+    )
+
+
+# 🔥 optional für lokalen Start
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
