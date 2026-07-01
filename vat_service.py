@@ -1,71 +1,52 @@
+import requests
 from vies_client import VIESClient
-from bzst_client import BZStClient
-from cache import VATCache
-from circuit_breaker import CircuitBreaker
-import time
-
-def clean_vat(vat: str):
-    return (
-        vat.strip()
-        .replace(" ", "")
-        .replace("\n", "")
-        .replace("\r", "")
-        .upper()
-    )
 
 
 class VATCheckService:
 
-    def search_company(self, name, address=""):
-
-    query = name
-    if address:
-        query += " " + address
-
-    url = f"https://api.opencorporates.com/v0.4/companies/search?q={query}"
-
-    try:
-        import requests
-        r = requests.get(url, timeout=10)
-        data = r.json()
-
-        companies = data.get("results", {}).get("companies", [])
-
-        if not companies:
-            return {"name": "", "vat": "", "address": ""}
-
-        best = companies[0]["company"]
-
-        return {
-            "name": best.get("name", ""),
-            "address": best.get("registered_address", ""),
-            "vat": best.get("company_number", "")
-        }
-
-    except Exception as e:
-        return {"name": "", "vat": "", "address": "", "error": str(e)}
-
-
-
     def __init__(self):
         self.vies = VIESClient()
-        self.bzst = BZStClient()
-        self.cache = VATCache()
-        self.cb = CircuitBreaker()
 
-    def check(self, input_text: str, mode="company"):
+    # 🟢 FIRMA → SUCHE (OpenCorporates)
+    def search_company(self, name, address=""):
 
-    input_text = input_text.strip()
+        query = name
+        if address:
+            query += " " + address
 
-    # 🔵 MODE 1: USt-ID Prüfung (optional weiter nutzbar)
-    if mode == "vat":
+        url = f"https://api.opencorporates.com/v0.4/companies/search?q={query}"
 
-        vat = input_text.replace(" ", "").upper()
+        try:
+            r = requests.get(url, timeout=10)
+            data = r.json()
+
+            companies = data.get("results", {}).get("companies", [])
+
+            if not companies:
+                return {"name": "", "address": "", "vat": ""}
+
+            best = companies[0]["company"]
+
+            return {
+                "name": best.get("name", ""),
+                "address": best.get("registered_address", ""),
+                "vat": best.get("company_number", "")
+            }
+
+        except Exception:
+            return {"name": "", "address": "", "vat": ""}
+
+    # 🔵 USt-ID CHECK (VIES)
+    def check_vat(self, vat: str):
+
+        vat = vat.strip().replace(" ", "").upper()
+
         country = vat[:2]
         number = vat[2:]
 
         try:
             result = self.vies.check(country, number)
+
             return {
                 "input": vat,
                 "valid": result.get("valid", False),
@@ -73,7 +54,8 @@ class VATCheckService:
                 "address": result.get("address", ""),
                 "vat": vat
             }
-        except:
+
+        except Exception:
             return {
                 "input": vat,
                 "valid": False,
@@ -82,25 +64,17 @@ class VATCheckService:
                 "vat": ""
             }
 
-    # 🟢 MODE 2: FIRMA → USt-ID Suche
-    result = self.search_company(input_text)
+    # 🟣 HAUPTFUNKTION (Firma → Daten suchen)
+    def check_company(self, input_text: str):
 
-    return {
-        "input": input_text,
-        "valid": False,
-        "name": result.get("name", ""),
-        "address": result.get("address", ""),
-        "vat": result.get("vat", "")
-    }
+        input_text = input_text.strip()
 
-country = vat[:2]
-number = vat[2:]
+        result = self.search_company(input_text)
 
-        try:
-            result = self.vies.check(country, number)
-            result["source"] = "VIES"
-        except Exception as e:
-            result = {"valid": False, "error": str(e), "source": "VIES"}
-
-        self.cache.set(vat, result)
-        return result
+        return {
+            "input": input_text,
+            "valid": False,
+            "name": result.get("name", ""),
+            "address": result.get("address", ""),
+            "vat": result.get("vat", "")
+        }
