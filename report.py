@@ -1,21 +1,21 @@
 from openpyxl import Workbook
-ws.append(["Input", "Company", "Address", "VAT"])
+
 
 class ExcelReport:
 
     def generate(self, data, file):
 
         wb = Workbook()
-        ws = wb.active
+        ws = wb.active   
 
-        ws.append(["VAT", "Valid", "Source", "Cached", "Error"])
+        ws.append(["Input", "Company", "Address", "VAT"])
 
         for r in data:
-           ws.append([
-    r.get("input"),
-    r.get("name"),
-    r.get("address"),
-    r.get("vat")
-])
+            ws.append([
+                r.get("input", ""),
+                r.get("name", ""),
+                r.get("address", ""),
+                r.get("vat", "")
+            ])
 
         wb.save(file)
