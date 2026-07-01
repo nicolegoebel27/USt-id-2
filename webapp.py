@@ -35,7 +35,7 @@ async def upload(file: UploadFile = File(...)):
         if not vat:
             continue
 
-        result = service.check(vat)
+        result = service.check(vat, mode="company")
 
         results.append({
             "vat": vat,
