@@ -1,5 +1,5 @@
 from openpyxl import Workbook
-
+ws.append(["Input", "Company", "Address", "VAT"])
 
 class ExcelReport:
 
@@ -11,12 +11,11 @@ class ExcelReport:
         ws.append(["VAT", "Valid", "Source", "Cached", "Error"])
 
         for r in data:
-            ws.append([
-                r.get("vat"),
-                r.get("valid"),
-                r.get("source"),
-                r.get("cached"),
-                r.get("error")
-            ])
+           ws.append([
+    r.get("input"),
+    r.get("name"),
+    r.get("address"),
+    r.get("vat")
+])
 
         wb.save(file)
